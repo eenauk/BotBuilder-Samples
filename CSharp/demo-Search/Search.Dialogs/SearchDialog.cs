@@ -39,6 +39,12 @@
         public async Task Search(IDialogContext context, IAwaitable<string> input)
         {
             string text = input != null ? await input : null;
+            await SearchOnString(context, text);
+        }
+
+            public async Task SearchOnString(IDialogContext context, string input)
+        {
+            string text = input;
             if (this.MultipleSelection && text != null && text.ToLowerInvariant() == "list")
             {
                 await this.ListAddedSoFar(context);
@@ -48,7 +54,8 @@
             {
                 if (text != null)
                 {
-                    this.QueryBuilder.SearchText = text;
+                    askLuis(text);
+                    //this.QueryBuilder.SearchText = text;
                 }
 
                 var response = await this.ExecuteSearchAsync();
@@ -73,6 +80,25 @@
                     context.Wait(this.ActOnSearchResults);
                 }
             }
+        }
+
+        private void askLuis(string text)
+        {
+            //throw new NotImplementedException();
+            if(text == "1 bedroom houses")
+            {
+                this.QueryBuilder.Refinements.Add("beds", new List<string>() { "1" });
+            }
+            else
+            {
+                this.QueryBuilder.SearchText = text;
+            }
+            /*
+            var beds = result.Document["beds"];
+            var baths = result.Document["baths"];
+            var city = result.Document["city"];
+            var price = result.Document["price"];
+            */
         }
 
         protected virtual Task InitialPrompt(IDialogContext context)
@@ -252,7 +278,7 @@
                     break;
 
                 default:
-                    await this.AddSelectedItem(context, choice);
+                    await this.SearchOnString(context, choice); 
                     break;
             }
         }

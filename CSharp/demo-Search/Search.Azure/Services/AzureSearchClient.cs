@@ -54,7 +54,14 @@
                     foreach (string value in entry.Value)
                     {
                         filter.Append(separator);
-                        filter.Append($"{entry.Key} eq '{EscapeFilterString(value)}'");
+                        if (entry.Key == "baths" || entry.Key == "beds")
+                        {
+                            filter.Append($"{entry.Key} eq {EscapeFilterString(value)}");
+                        }
+                        else
+                        {
+                            filter.Append($"{entry.Key} eq '{EscapeFilterString(value)}'");
+                        }
                         separator = " and ";
                     }
                 }
