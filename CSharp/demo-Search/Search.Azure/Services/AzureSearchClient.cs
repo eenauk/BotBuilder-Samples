@@ -54,13 +54,21 @@
                     foreach (string value in entry.Value)
                     {
                         filter.Append(separator);
-                        if (entry.Key == "baths" || entry.Key == "beds")
-                        {
-                            filter.Append($"{entry.Key} eq {EscapeFilterString(value)}");
-                        }
-                        else
-                        {
+                        switch(entry.Key)
+                        { 
+                            case "MinPrice":                        
+                                filter.Append($"price gt {EscapeFilterString(value)}");
+                                break;
+                            case "MaxPrice":
+                                filter.Append($"price lt {EscapeFilterString(value)}");
+                                break;
+                            case "beds":
+                            case "baths":
+                                filter.Append($"{entry.Key} eq {EscapeFilterString(value)}");
+                                break;
+                            default: //assume string
                             filter.Append($"{entry.Key} eq '{EscapeFilterString(value)}'");
+                                break;
                         }
                         separator = " and ";
                     }

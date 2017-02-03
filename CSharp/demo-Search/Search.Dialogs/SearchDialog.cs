@@ -9,6 +9,7 @@
     using Microsoft.Bot.Connector;
     using Search.Models;
     using Search.Services;
+    using AskLuis;
 
     [Serializable]
     public abstract class SearchDialog : IDialog<IList<SearchHit>>
@@ -21,6 +22,8 @@
 
         private bool firstPrompt = true;
         private IList<SearchHit> found;
+
+        private Luis luis = new Luis("ca543180a0714f28bf29312a667a510a", "330d4213-c738-4df2-8cf8-90a1f4992d4d");
 
         public SearchDialog(ISearchClient searchClient, SearchQueryBuilder queryBuilder = null, PromptStyler searchHitStyler = null, bool multipleSelection = false)
         {
@@ -54,7 +57,7 @@
             {
                 if (text != null)
                 {
-                    askLuis(text);
+                    await askLuis(text);
                     //this.QueryBuilder.SearchText = text;
                 }
 
@@ -82,16 +85,55 @@
             }
         }
 
-        private void askLuis(string text)
+        private async Task askLuis(string text)
         {
-            //throw new NotImplementedException();
-            if(text == "1 bedroom houses")
+            LuisResponse response = await luis.GetIntent(text);
+
+            string intent = response.topScoringIntent.intent;
+            if (intent != "None")
             {
-                this.QueryBuilder.Refinements.Add("beds", new List<string>() { "1" });
+                //new lookup so clear everything out
+                if (intent == "house lookup")
+                {
+                    this.QueryBuilder.Refinements.Clear();
+                    this.QueryBuilder.PageNumber = 1;
+                    this.QueryBuilder.SearchText = "";
+                }
+                //if either new lookup or refinement, then set as many refinements as possible
+                foreach (var e in response.entities)
+                {
+                    switch (e.type)
+                    {
+                        case "bedrooms":
+                            this.QueryBuilder.Refinements.Remove("beds");
+                            this.QueryBuilder.Refinements.Add("beds", new List<string>() { e.entity });
+                            break;
+                        case "bathrooms":
+                            this.QueryBuilder.Refinements.Remove("baths");
+                            this.QueryBuilder.Refinements.Add("baths", new List<string>() { e.entity });
+                            break;
+                        case "builtin.geography.city":
+                            this.QueryBuilder.Refinements.Remove("city");
+                            this.QueryBuilder.Refinements.Add("city", new List<string>() { UppercaseFirstLetter(e.entity) });
+                            break;
+                        case "city":
+                            this.QueryBuilder.Refinements.Remove("city");
+                            this.QueryBuilder.Refinements.Add("city", new List<string>() { UppercaseFirstLetter(e.entity) });
+                            break;
+                        case "PriceBegin":
+                            this.QueryBuilder.Refinements.Remove("MinPrice");
+                            this.QueryBuilder.Refinements.Add("MinPrice", new List<string>() { CleanupPrice(e.entity) });
+                            break;
+                        case "PriceEnd":
+                            this.QueryBuilder.Refinements.Remove("MaxPrice");
+                            this.QueryBuilder.Refinements.Add("MaxPrice", new List<string>() { CleanupPrice(e.entity) });
+                            break;
+                    }
+                }
             }
             else
             {
-                this.QueryBuilder.SearchText = text;
+                this.QueryBuilder.SearchText = text; 
             }
             /*
             var beds = result.Document["beds"];
@@ -99,6 +141,23 @@
             var city = result.Document["city"];
             var price = result.Document["price"];
             */
+        }
+
+        private string CleanupPrice(string dirtyPrice)
+        {
+            string cleanPrice = dirtyPrice;
+            cleanPrice = cleanPrice.Replace("$", "");
+            cleanPrice = cleanPrice.Replace(",", "");
+            cleanPrice = cleanPrice.Replace("k", "000");
+            cleanPrice = cleanPrice.Replace(" ","");
+
+            return cleanPrice;
+        }
+
+        private string UppercaseFirstLetter(string text)
+        {
+            if (String.IsNullOrEmpty(text)) return String.Empty;
+            return text.First().ToString().ToUpper() + text.Substring(1);
         }
 
         protected virtual Task InitialPrompt(IDialogContext context)

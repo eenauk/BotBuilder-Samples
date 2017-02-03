@@ -72,6 +72,7 @@
     </Reference>
     <Reference Include="System.Net.Http.WebRequest" />
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Threading.Tasks" />
     <Reference Include="System.Web.Http, Version=5.2.3.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.AspNet.WebApi.Core.5.2.3\lib\net45\System.Web.Http.dll</HintPath>
       <Private>True</Private>
@@ -93,6 +94,10 @@
     <Compile Include="SearchSelectRefinerDialog.cs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Luis2\AskLuis.csproj">
+      <Project>{d911ff5f-c0cf-407f-a40b-2be64718d47a}</Project>
+      <Name>AskLuis</Name>
+    </ProjectReference>
     <ProjectReference Include="..\Search.Azure\Search.Azure.csproj">
       <Project>{2734b7aa-2144-41a8-9423-225a544438b8}</Project>
       <Name>Search.Azure</Name>
