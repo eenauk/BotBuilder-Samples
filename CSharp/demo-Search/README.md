@@ -1,5 +1,6 @@
 # Azure Search Samples
 
+
 Depending on the nature of any given bot, sometimes you want to present structured dialogs that take users through tight paths, while in other cases you want to 
 help users navigate a large amount of content. In many cases you'll have a mix of dialogs of both kinds in a single bot.  
 
