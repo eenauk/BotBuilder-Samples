@@ -104,13 +104,13 @@
                 {
                     switch (e.type)
                     {
-                        case "bedrooms":
+                        case "number of bedrooms":
                             this.QueryBuilder.Refinements.Remove("beds");
-                            this.QueryBuilder.Refinements.Add("beds", new List<string>() { e.entity });
+                            this.QueryBuilder.Refinements.Add("beds", new List<string>() { CleanupNumber(e.entity) });
                             break;
-                        case "bathrooms":
+                        case "number of bathrooms":
                             this.QueryBuilder.Refinements.Remove("baths");
-                            this.QueryBuilder.Refinements.Add("baths", new List<string>() { e.entity });
+                            this.QueryBuilder.Refinements.Add("baths", new List<string>() { CleanupNumber(e.entity) });
                             break;
                         case "builtin.geography.city":
                             this.QueryBuilder.Refinements.Remove("city");
@@ -128,6 +128,72 @@
                             this.QueryBuilder.Refinements.Remove("MaxPrice");
                             this.QueryBuilder.Refinements.Add("MaxPrice", new List<string>() { CleanupPrice(e.entity) });
                             break;
+                    case "up":
+                            if(response.entities.Where(x => x.type == "bedroom").Count() > 0)
+                            {
+                                int NumBeds = 2;
+                                //get current number of beds, so we can increment it
+                                try
+                                {
+                                    List<string> ListBeds = this.QueryBuilder.Refinements.Where(x => x.Key == "beds").FirstOrDefault().Value.ToList();
+                                    string StrBeds = ListBeds.SingleOrDefault();
+                                    NumBeds = Convert.ToInt32(CleanupNumber(StrBeds));
+                                }
+                                catch { }
+                                        NumBeds++;
+                                        this.QueryBuilder.Refinements.Remove("beds");
+                                        this.QueryBuilder.Refinements.Add("beds", new List<string>() { NumBeds.ToString() });
+                                 
+                            }
+                            if(response.entities.Where(x => x.type == "bathroom").Count() > 0)
+                            {
+                                int NumBaths = 2;
+                                try
+                                {
+                                    List<string> ListBaths = this.QueryBuilder.Refinements.Where(x => x.Key == "baths").FirstOrDefault().Value.ToList();
+                                    string StrBaths = ListBaths.SingleOrDefault();
+                                    NumBaths = Convert.ToInt32(CleanupNumber(StrBaths));
+                                }
+                                catch { }
+                                        NumBaths++;
+                                        this.QueryBuilder.Refinements.Remove("baths");
+                                        this.QueryBuilder.Refinements.Add("baths", new List<string>() { NumBaths.ToString() });
+                              
+                            }
+                            break;
+                        case "down":
+                            if (response.entities.Where(x => x.type == "bedroom").Count() > 0)
+                            {
+                                //get current number of beds, so we can decrement it
+                                int NumBeds = 2;
+                                try
+                                {
+                                    List<string> ListBeds = this.QueryBuilder.Refinements.Where(x => x.Key == "beds").FirstOrDefault().Value.ToList();
+                                    string StrBeds = ListBeds.SingleOrDefault();
+                                    NumBeds = Convert.ToInt32(CleanupNumber(StrBeds));
+                                }
+                                catch { }
+                                    NumBeds--;
+                                    this.QueryBuilder.Refinements.Remove("beds");
+                                    this.QueryBuilder.Refinements.Add("beds", new List<string>() { NumBeds.ToString() });
+                     
+                            }
+                            if (response.entities.Where(x => x.type == "bathroom").Count() > 0)
+                            {
+                                int NumBaths = 2;
+                                try
+                                {
+                                    List<string> ListBaths = this.QueryBuilder.Refinements.Where(x => x.Key == "baths").FirstOrDefault().Value.ToList();
+                                    string StrBaths = ListBaths.SingleOrDefault();
+                                    NumBaths = Convert.ToInt32(CleanupNumber(StrBaths));
+                                }
+                                catch { }
+                                    NumBaths--;
+                                    this.QueryBuilder.Refinements.Remove("baths");
+                                    this.QueryBuilder.Refinements.Add("baths", new List<string>() { NumBaths.ToString() });
+                              
+                            }
+                            break;
                     }
                 }
             }
@@ -141,6 +207,27 @@
             var city = result.Document["city"];
             var price = result.Document["price"];
             */
+        }
+
+        private string CleanupNumber(string numberString)
+        {
+            numberString = numberString.ToLower();
+            switch (numberString)
+                {
+                case "one":
+                    return "1";
+                case "two":
+                    return "2";
+                case "three":
+                    return "3";
+                case "four":
+                    return "4";
+                case "five":
+                    return "5";
+                case "six":
+                    return "6";
+            }
+            return numberString;
         }
 
         private string CleanupPrice(string dirtyPrice)
