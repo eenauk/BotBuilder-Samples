@@ -45,7 +45,7 @@
             await SearchOnString(context, text);
         }
 
-            public async Task SearchOnString(IDialogContext context, string input)
+        public async Task SearchOnString(IDialogContext context, string input)
         {
             string text = input;
             if (this.MultipleSelection && text != null && text.ToLowerInvariant() == "list")
@@ -53,160 +53,167 @@
                 await this.ListAddedSoFar(context);
                 await this.InitialPrompt(context);
             }
+
+            // when the user selects a house, this returns the house ID, which is an int
+            // and must be used to add the house to the ongoing list
+            int houseNumber;
+            if (int.TryParse(text, out houseNumber))
+            {
+                await AddSelectedItem(context, text);
+            }
+
+            //otherwise assume this is a query and ask LUIS to interpret it
             else
             {
-                if (text != null)
+                string intent="";
+                if (text != null && text.ToLowerInvariant() != "list")
                 {
-                    await askLuis(text);
+                    intent = await askLuis(text);
                     //this.QueryBuilder.SearchText = text;
                 }
-
-                var response = await this.ExecuteSearchAsync();
-
-                if (response.Results.Count() == 0)
+                switch (intent)
                 {
-                    await this.NoResultsConfirmRetry(context);
-                }
-                else
-                {
-                    var message = context.MakeMessage();
-                    this.found = response.Results.ToList();
-                    this.HitStyler.Apply(
-                        ref message,
-                        "Here are a few good options I found:",
-                        this.found.ToList().AsReadOnly());
-                    await context.PostAsync(message);
-                    await context.PostAsync(
-                        this.MultipleSelection ?
-                        "You can select one or more to add to your list, *list* what you've selected so far, *refine* these results, see *more* or search *again*." :
-                        "You can select one, *refine* these results, see *more* or search *again*.");
-                    context.Wait(this.ActOnSearchResults);
+                    case "bye":
+                        await this.GoodBye(context);
+                        break;
+                    case "start over":
+                        await this.StartOver(context);
+                        break;
+                    case "search":
+                        {
+                            GenericSearchResult response = new GenericSearchResult();
+                            try
+                            {
+                                response = await this.ExecuteSearchAsync();
+                            }
+                            catch
+                            {
+                                await this.UnkownActionOnResults(context, text);
+                            }
+                            if (response.Results.Count() == 0)
+                            {
+                                await this.NoResultsConfirmRetry(context);
+                            }
+                            else
+                            {
+                                var message = context.MakeMessage();
+                                this.found = response.Results.ToList();
+                                this.HitStyler.Apply(
+                                    ref message,
+                                    "Here are a few good options I found:",
+                                    this.found.ToList().AsReadOnly());
+                                await context.PostAsync(message);
+                                /*await context.PostAsync(
+                                    this.MultipleSelection ?
+                                    "You can select one or more to add to your list, *list* what you've selected so far, *refine* these results, see *more* or search *again*." :
+                                    "You can select one, *refine* these results, see *more* or search *again*.");*/
+                                context.Wait(this.ActOnSearchResults);
+                            }
+                        }
+                        break;
                 }
             }
         }
 
-        private async Task askLuis(string text)
+        protected virtual async Task StartOver(IDialogContext context)
+        {
+            this.QueryBuilder.Refinements.Clear();
+            await context.PostAsync("Ok, we can start over.");
+        }
+
+        protected virtual async Task GoodBye(IDialogContext context)
+        {
+            this.QueryBuilder.Refinements.Clear();
+            await context.PostAsync("Thank you. Good Bye.");
+        }
+
+        private async Task<string> askLuis(string text)
         {
             LuisResponse response = await luis.GetIntent(text);
 
             string intent = response.topScoringIntent.intent;
-            if (intent != "None")
+            switch (intent)
             {
-                //new lookup so clear everything out
-                if (intent == "house lookup")
-                {
-                    this.QueryBuilder.Refinements.Clear();
-                    this.QueryBuilder.PageNumber = 1;
-                    this.QueryBuilder.SearchText = "";
-                }
+                case "bye":
+                    return "bye";
+                case "start over":
+                    return "start over";
+                case "house lookup":
+                case "refinement":
+                    //new lookup so clear everything out
+                    if (intent == "house lookup")
+                    {
+                        this.QueryBuilder.Refinements.Clear();
+                        this.QueryBuilder.PageNumber = 1;
+                        this.QueryBuilder.SearchText = "";
+                    }
                 //if either new lookup or refinement, then set as many refinements as possible
                 foreach (var e in response.entities)
-                {
-                    switch (e.type)
                     {
-                        case "number of bedrooms":
-                            this.QueryBuilder.Refinements.Remove("beds");
-                            this.QueryBuilder.Refinements.Add("beds", new List<string>() { CleanupNumber(e.entity) });
-                            break;
-                        case "number of bathrooms":
-                            this.QueryBuilder.Refinements.Remove("baths");
-                            this.QueryBuilder.Refinements.Add("baths", new List<string>() { CleanupNumber(e.entity) });
-                            break;
-                        case "builtin.geography.city":
-                            this.QueryBuilder.Refinements.Remove("city");
-                            this.QueryBuilder.Refinements.Add("city", new List<string>() { UppercaseFirstLetter(e.entity) });
-                            break;
-                        case "city":
-                            this.QueryBuilder.Refinements.Remove("city");
-                            this.QueryBuilder.Refinements.Add("city", new List<string>() { UppercaseFirstLetter(e.entity) });
-                            break;
-                        case "PriceBegin":
-                            this.QueryBuilder.Refinements.Remove("MinPrice");
-                            this.QueryBuilder.Refinements.Add("MinPrice", new List<string>() { CleanupPrice(e.entity) });
-                            break;
-                        case "PriceEnd":
-                            this.QueryBuilder.Refinements.Remove("MaxPrice");
-                            this.QueryBuilder.Refinements.Add("MaxPrice", new List<string>() { CleanupPrice(e.entity) });
-                            break;
-                    case "up":
-                            if(response.entities.Where(x => x.type == "bedroom").Count() > 0)
-                            {
-                                int NumBeds = 2;
-                                //get current number of beds, so we can increment it
-                                try
-                                {
-                                    List<string> ListBeds = this.QueryBuilder.Refinements.Where(x => x.Key == "beds").FirstOrDefault().Value.ToList();
-                                    string StrBeds = ListBeds.SingleOrDefault();
-                                    NumBeds = Convert.ToInt32(CleanupNumber(StrBeds));
-                                }
-                                catch { }
-                                        NumBeds++;
-                                        this.QueryBuilder.Refinements.Remove("beds");
-                                        this.QueryBuilder.Refinements.Add("beds", new List<string>() { NumBeds.ToString() });
-                                 
-                            }
-                            if(response.entities.Where(x => x.type == "bathroom").Count() > 0)
-                            {
-                                int NumBaths = 2;
-                                try
-                                {
-                                    List<string> ListBaths = this.QueryBuilder.Refinements.Where(x => x.Key == "baths").FirstOrDefault().Value.ToList();
-                                    string StrBaths = ListBaths.SingleOrDefault();
-                                    NumBaths = Convert.ToInt32(CleanupNumber(StrBaths));
-                                }
-                                catch { }
-                                        NumBaths++;
-                                        this.QueryBuilder.Refinements.Remove("baths");
-                                        this.QueryBuilder.Refinements.Add("baths", new List<string>() { NumBaths.ToString() });
-                              
-                            }
-                            break;
-                        case "down":
-                            if (response.entities.Where(x => x.type == "bedroom").Count() > 0)
-                            {
-                                //get current number of beds, so we can decrement it
-                                int NumBeds = 2;
-                                try
-                                {
-                                    List<string> ListBeds = this.QueryBuilder.Refinements.Where(x => x.Key == "beds").FirstOrDefault().Value.ToList();
-                                    string StrBeds = ListBeds.SingleOrDefault();
-                                    NumBeds = Convert.ToInt32(CleanupNumber(StrBeds));
-                                }
-                                catch { }
-                                    NumBeds--;
-                                    this.QueryBuilder.Refinements.Remove("beds");
-                                    this.QueryBuilder.Refinements.Add("beds", new List<string>() { NumBeds.ToString() });
-                     
-                            }
-                            if (response.entities.Where(x => x.type == "bathroom").Count() > 0)
-                            {
-                                int NumBaths = 2;
-                                try
-                                {
-                                    List<string> ListBaths = this.QueryBuilder.Refinements.Where(x => x.Key == "baths").FirstOrDefault().Value.ToList();
-                                    string StrBaths = ListBaths.SingleOrDefault();
-                                    NumBaths = Convert.ToInt32(CleanupNumber(StrBaths));
-                                }
-                                catch { }
-                                    NumBaths--;
-                                    this.QueryBuilder.Refinements.Remove("baths");
-                                    this.QueryBuilder.Refinements.Add("baths", new List<string>() { NumBaths.ToString() });
-                              
-                            }
-                            break;
+                        switch (e.type)
+                        {
+                            case "number of bedrooms":
+                                this.QueryBuilder.Refinements.Remove("beds");
+                                this.QueryBuilder.Refinements.Add("beds", new List<string>() { CleanupNumber(e.entity) });
+                                break;
+                            case "number of bathrooms":
+                                this.QueryBuilder.Refinements.Remove("baths");
+                                this.QueryBuilder.Refinements.Add("baths", new List<string>() { CleanupNumber(e.entity) });
+                                break;
+                            case "builtin.geography.city":
+                                this.QueryBuilder.Refinements.Remove("city");
+                                this.QueryBuilder.Refinements.Add("city", new List<string>() { UppercaseFirstLetter(e.entity) });
+                                break;
+                            case "city":
+                                this.QueryBuilder.Refinements.Remove("city");
+                                this.QueryBuilder.Refinements.Add("city", new List<string>() { UppercaseFirstLetter(e.entity) });
+                                break;
+                            case "PriceBegin":
+                                this.QueryBuilder.Refinements.Remove("MinPrice");
+                                this.QueryBuilder.Refinements.Add("MinPrice", new List<string>() { CleanupPrice(e.entity) });
+                                break;
+                            case "PriceEnd":
+                                this.QueryBuilder.Refinements.Remove("MaxPrice");
+                                this.QueryBuilder.Refinements.Add("MaxPrice", new List<string>() { CleanupPrice(e.entity) });
+                                break;
+                          }
                     }
-                }
+                    break;
+                case "refinement - fewer rooms":
+                case "refinement - more rooms":
+                    foreach( var e in response.entities)
+                    {
+                        if (e.type == "bedroom" || e.type == "bathroom")
+                        {
+                            string key = "";
+                            key =  e.type == "bedroom"? "beds" : "baths";
+                            //get current number of beds, so we can in/decrement it
+                            int NumBeds = GetNumRooms(key);
+                            if (intent == "refinement - fewer rooms") NumBeds--;
+                                else NumBeds++;
+                            this.QueryBuilder.Refinements.Remove(key);
+                            this.QueryBuilder.Refinements.Add(key, new List<string>() { NumBeds.ToString() });
+                        }
+                    }
+                    break;
+                default:
+                    this.QueryBuilder.SearchText = text;
+                    break;
             }
-            else
+            return "search";
+        }
+
+        private int GetNumRooms(string bedorbath)
+        {
+            int NumRooms = 2;
+            try
             {
-                this.QueryBuilder.SearchText = text; 
+                List<string> ListRooms = this.QueryBuilder.Refinements.Where(x => x.Key == bedorbath).FirstOrDefault().Value.ToList();
+                string StrRooms = ListRooms.SingleOrDefault();
+                NumRooms = Convert.ToInt32(CleanupNumber(StrRooms));
             }
-            /*
-            var beds = result.Document["beds"];
-            var baths = result.Document["baths"];
-            var city = result.Document["city"];
-            var price = result.Document["price"];
-            */
+            catch { }
+            return NumRooms;
         }
 
         private string CleanupNumber(string numberString)
@@ -314,7 +321,7 @@
 
         protected virtual async Task UnkownActionOnResults(IDialogContext context, string action)
         {
-            await context.PostAsync("Not sure what you mean. You can search *again*, *refine*, *list* or select one of the items above. Or are you *done*?");
+            await context.PostAsync("Sorry, I'm not sure what you mean. Or are you *done*?");
             context.Wait(this.ActOnSearchResults);
         }
 
