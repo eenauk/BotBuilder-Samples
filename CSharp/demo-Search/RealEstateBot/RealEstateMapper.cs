@@ -4,6 +4,7 @@
     using Microsoft.Azure.Search.Models;
     using Search.Azure.Services;
     using Search.Models;
+    using System.Collections.Generic;
 
     public class RealEstateMapper : IMapper<DocumentSearchResult, GenericSearchResult>
     {
@@ -33,7 +34,8 @@
                 Key = (string)hit.Document["listingId"],
                 Title = GetTitleForItem(hit),
                 PictureUrl = (string)hit.Document["thumbnail"],
-                Description = (string)hit.Document["description"]
+                Description = (string)hit.Document["description"],
+                PropertyBag = new Dictionary<string, object>() { { "sqft", (object)hit.Document["sqft"] } }
             };
         }
 
@@ -45,7 +47,7 @@
             var price = result.Document["price"];
             var sqft = result.Document["sqft"];
 
-            return $"{beds} bedroom, {baths} bath in {city}, ${price:#,0}, {sqft:#,0} sqft";
+            return $"{beds} bedroom, {baths} bath in {city}, ${price:#,0} -- {sqft} sqft";
         }
     }
 }

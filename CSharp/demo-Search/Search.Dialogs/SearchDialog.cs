@@ -249,9 +249,18 @@
             int sqft = 2000;
             try
             {
-                List<string> ListRefinements = this.QueryBuilder.Refinements.Where(x => x.Key == "MinSqft" || x.Key == "MaxSqft").FirstOrDefault().Value.ToList();
-                string sqftStr = ListRefinements.SingleOrDefault();
-                sqft = Convert.ToInt32(CleanupNumber(sqftStr));
+                if (this.QueryBuilder.Refinements.Where(x => x.Key == "MinSqft" || x.Key == "MaxSqft").Count() > 0)
+                {
+                    List<string> ListRefinements = this.QueryBuilder.Refinements
+                        .Where(x => x.Key == "MinSqft" || x.Key == "MaxSqft")
+                        .FirstOrDefault().Value.ToList();
+                    string sqftStr = ListRefinements.SingleOrDefault();
+                    sqft = Convert.ToInt32(CleanupNumber(sqftStr));
+                }
+                else if (found.Count > 0)
+                {
+                    sqft = (int)Math.Round(found.Average(x => (long)x.PropertyBag["sqft"]));
+                }
             }
             catch { }
             return sqft;
@@ -298,7 +307,7 @@
 
         protected virtual Task InitialPrompt(IDialogContext context)
         {
-            string prompt = "What would you like to search for?";
+            string prompt = "Hi. What would you like to search for?";
 
             if (!this.firstPrompt)
             {
