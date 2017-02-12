@@ -62,6 +62,12 @@
                             case "MaxPrice":
                                 filter.Append($"price lt {EscapeFilterString(value)}");
                                 break;
+                            case "MinSqft":
+                                filter.Append($"sqft gt {EscapeFilterString(value)}");
+                                break;
+                            case "MaxSqft":
+                                filter.Append($"sqft lt {EscapeFilterString(value)}");
+                                break;
                             case "beds":
                             case "baths":
                                 filter.Append($"{entry.Key} eq {EscapeFilterString(value)}");

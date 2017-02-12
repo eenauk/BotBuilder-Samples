@@ -68,8 +68,11 @@
                 string intent="";
                 if (text != null && text.ToLowerInvariant() != "list")
                 {
-                    intent = await askLuis(text);
-                    //this.QueryBuilder.SearchText = text;
+                    try
+                    {
+                        intent = await askLuis(text);
+                    }
+                    catch { }
                 }
                 switch (intent)
                 {
@@ -85,31 +88,35 @@
                             try
                             {
                                 response = await this.ExecuteSearchAsync();
+                            
+                                if (response.Results.Count() == 0)
+                                {
+                                    await this.NoResultsConfirmRetry(context);
+                                }
+                                else
+                                {
+                                    var message = context.MakeMessage();
+                                    this.found = response.Results.ToList();
+                                    this.HitStyler.Apply(
+                                        ref message,
+                                        "Here are a few good options I found:",
+                                        this.found.ToList().AsReadOnly());
+                                    await context.PostAsync(message);
+                                    /*await context.PostAsync(
+                                        this.MultipleSelection ?
+                                        "You can select one or more to add to your list, *list* what you've selected so far, *refine* these results, see *more* or search *again*." :
+                                        "You can select one, *refine* these results, see *more* or search *again*.");*/
+                                    context.Wait(this.ActOnSearchResults);
+                                }
                             }
                             catch
                             {
                                 await this.UnkownActionOnResults(context, text);
                             }
-                            if (response.Results.Count() == 0)
-                            {
-                                await this.NoResultsConfirmRetry(context);
-                            }
-                            else
-                            {
-                                var message = context.MakeMessage();
-                                this.found = response.Results.ToList();
-                                this.HitStyler.Apply(
-                                    ref message,
-                                    "Here are a few good options I found:",
-                                    this.found.ToList().AsReadOnly());
-                                await context.PostAsync(message);
-                                /*await context.PostAsync(
-                                    this.MultipleSelection ?
-                                    "You can select one or more to add to your list, *list* what you've selected so far, *refine* these results, see *more* or search *again*." :
-                                    "You can select one, *refine* these results, see *more* or search *again*.");*/
-                                context.Wait(this.ActOnSearchResults);
-                            }
                         }
+                        break;
+                    default:
+                        await UnkownActionOnResults(context, "");
                         break;
                 }
             }
@@ -196,6 +203,27 @@
                         }
                     }
                     break;
+                case "refinement - house size":
+                    int sqft = GetSqft();
+                    foreach( var e in response.entities)
+                    {
+                        if(e.type == "up")
+                        {
+                            int NewSqft = (int)Math.Round(sqft * 1.2);
+                            this.QueryBuilder.Refinements.Remove("MinSqft");
+                            this.QueryBuilder.Refinements.Remove("MaxSqft");
+                            this.QueryBuilder.Refinements.Add("MinSqft", new List<string> { NewSqft.ToString() });
+                        }
+                        if (e.type == "down")
+                        {
+                            int NewSqft = (int)Math.Round(sqft * 0.8);
+                            this.QueryBuilder.Refinements.Remove("MinSqft");
+                            this.QueryBuilder.Refinements.Remove("MaxSqft");
+                            this.QueryBuilder.Refinements.Add("MaxSqft", new List<string> { NewSqft.ToString() });
+                        }
+                    }
+
+                    break;
                 default:
                     this.QueryBuilder.SearchText = text;
                     break;
@@ -214,6 +242,19 @@
             }
             catch { }
             return NumRooms;
+        }
+
+        private int GetSqft()
+        {
+            int sqft = 2000;
+            try
+            {
+                List<string> ListRefinements = this.QueryBuilder.Refinements.Where(x => x.Key == "MinSqft" || x.Key == "MaxSqft").FirstOrDefault().Value.ToList();
+                string sqftStr = ListRefinements.SingleOrDefault();
+                sqft = Convert.ToInt32(CleanupNumber(sqftStr));
+            }
+            catch { }
+            return sqft;
         }
 
         private string CleanupNumber(string numberString)
@@ -243,8 +284,9 @@
             cleanPrice = cleanPrice.Replace("$", "");
             cleanPrice = cleanPrice.Replace(",", "");
             cleanPrice = cleanPrice.Replace("k", "000");
+            cleanPrice = cleanPrice.Replace("M", "000000");
             cleanPrice = cleanPrice.Replace(" ","");
-
+            
             return cleanPrice;
         }
 
@@ -321,7 +363,7 @@
 
         protected virtual async Task UnkownActionOnResults(IDialogContext context, string action)
         {
-            await context.PostAsync("Sorry, I'm not sure what you mean. Or are you *done*?");
+            await context.PostAsync("Sorry, I'm not sure what you mean. Can you rephrase it?");
             context.Wait(this.ActOnSearchResults);
         }
 

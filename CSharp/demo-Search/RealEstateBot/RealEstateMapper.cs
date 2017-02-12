@@ -43,8 +43,9 @@
             var baths = result.Document["baths"];
             var city = result.Document["city"];
             var price = result.Document["price"];
+            var sqft = result.Document["sqft"];
 
-            return $"{beds} bedroom, {baths} bath in {city}, ${price:#,0}";
+            return $"{beds} bedroom, {baths} bath in {city}, ${price:#,0}, {sqft:#,0} sqft";
         }
     }
 }
